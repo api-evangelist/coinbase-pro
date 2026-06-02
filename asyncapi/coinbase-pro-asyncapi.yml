@@ -1,0 +1,1274 @@
+asyncapi: '2.6.0'
+info:
+  title: Coinbase WebSocket APIs
+  version: '2026-05-29'
+  description: |
+    AsyncAPI specification covering the two publicly documented Coinbase
+    real-time WebSocket feeds:
+
+    1. **Coinbase Exchange (formerly Coinbase Pro) WebSocket Feed**
+       - URL: `wss://ws-feed.exchange.coinbase.com`
+       - Docs: https://docs.cdp.coinbase.com/exchange/docs/websocket-overview
+       - Channels: heartbeat, status, ticker, ticker_batch, level2,
+         level2_batch, full, matches, auction, user, rfq_matches
+       - Authentication for `full` / `user` channels uses
+         `key`, `passphrase`, `signature` (HMAC-SHA256 over
+         `timestamp + GET + /users/self/verify`) and `timestamp`
+         included in the subscribe envelope.
+
+    2. **Coinbase Advanced Trade WebSocket**
+       - URL: `wss://advanced-trade-ws.coinbase.com`
+         (and `wss://advanced-trade-ws-user.coinbase.com` for the
+         User Order Data endpoint used by `user`, `heartbeats`, and
+         `futures_balance_summary`)
+       - Docs: https://docs.cdp.coinbase.com/coinbase-app/advanced-trade-apis/websocket/websocket-overview
+       - Channels: heartbeats, candles, market_trades, status, ticker,
+         ticker_batch, level2, user, futures_balance_summary
+       - Authentication uses a JWT (ES256, `kid` = API Key, 16-byte hex
+         nonce, `iss` = "cdp", `nbf` = now, `exp` = now + 120s,
+         `sub` = API Key) supplied in the subscribe envelope.
+         A fresh JWT must be generated for every subscribe message.
+
+    Both feeds require a `subscribe` message after the connection opens,
+    otherwise Coinbase disconnects the client after about 5 seconds.
+  contact:
+    name: Coinbase Developer Platform
+    url: https://docs.cdp.coinbase.com/
+  license:
+    name: Coinbase Developer Platform Terms
+    url: https://www.coinbase.com/legal/cloud
+  x-source-docs:
+    - https://docs.cdp.coinbase.com/exchange/docs/websocket-overview
+    - https://docs.cdp.coinbase.com/exchange/websocket-feed/overview
+    - https://docs.cdp.coinbase.com/exchange/websocket-feed/channels
+    - https://docs.cdp.coinbase.com/coinbase-app/advanced-trade-apis/websocket/websocket-overview
+    - https://docs.cdp.coinbase.com/coinbase-app/advanced-trade-apis/websocket/websocket-channels
+
+defaultContentType: application/json
+
+servers:
+  exchange:
+    url: ws-feed.exchange.coinbase.com
+    protocol: wss
+    description: |
+      Coinbase Exchange (formerly Coinbase Pro) public WebSocket feed.
+      A sandbox URL `wss://ws-feed-public.sandbox.exchange.coinbase.com`
+      is also available.
+    security:
+      - exchangeSignedAuth: []
+  advancedTrade:
+    url: advanced-trade-ws.coinbase.com
+    protocol: wss
+    description: |
+      Coinbase Advanced Trade public WebSocket. Use this endpoint for
+      public market data channels: heartbeats, candles, market_trades,
+      status, ticker, ticker_batch, level2.
+    security:
+      - advancedTradeJwt: []
+  advancedTradeUser:
+    url: advanced-trade-ws-user.coinbase.com
+    protocol: wss
+    description: |
+      Coinbase Advanced Trade User Order Data endpoint. Required for the
+      `user`, `heartbeats`, and `futures_balance_summary` channels.
+    security:
+      - advancedTradeJwt: []
+
+channels:
+  ##############################################################
+  # Coinbase Exchange channels
+  ##############################################################
+
+  exchange/heartbeat:
+    description: |
+      Per-second keepalive containing the last trade `sequence` and
+      `last_trade_id` for the subscribed products. Useful to detect
+      sequence gaps in `full` / `matches` / `level2`.
+    servers: [exchange]
+    bindings:
+      ws:
+        method: GET
+    subscribe:
+      operationId: exchangeHeartbeatSubscribe
+      summary: Receive heartbeat messages.
+      message:
+        $ref: '#/components/messages/ExchangeHeartbeat'
+    publish:
+      operationId: exchangeHeartbeatSubscribeRequest
+      summary: Subscribe to the heartbeat channel.
+      message:
+        $ref: '#/components/messages/ExchangeSubscribe'
+
+  exchange/status:
+    description: |
+      Broadcast of all available products and currencies on the
+      Exchange with their trading status and network details.
+    servers: [exchange]
+    subscribe:
+      operationId: exchangeStatusSubscribe
+      message:
+        $ref: '#/components/messages/ExchangeStatus'
+    publish:
+      operationId: exchangeStatusSubscribeRequest
+      message:
+        $ref: '#/components/messages/ExchangeSubscribe'
+
+  exchange/ticker:
+    description: |
+      Real-time price updates on every match. Cascading matches are
+      batched to reduce bandwidth.
+    servers: [exchange]
+    subscribe:
+      operationId: exchangeTickerSubscribe
+      message:
+        $ref: '#/components/messages/ExchangeTicker'
+    publish:
+      operationId: exchangeTickerSubscribeRequest
+      message:
+        $ref: '#/components/messages/ExchangeSubscribe'
+
+  exchange/ticker_batch:
+    description: |
+      Same payload as `ticker` but emitted at most once every 5 seconds
+      per product when the price has changed.
+    servers: [exchange]
+    subscribe:
+      operationId: exchangeTickerBatchSubscribe
+      message:
+        $ref: '#/components/messages/ExchangeTicker'
+    publish:
+      operationId: exchangeTickerBatchSubscribeRequest
+      message:
+        $ref: '#/components/messages/ExchangeSubscribe'
+
+  exchange/level2:
+    description: |
+      Guaranteed-delivery order book channel. Sends one `snapshot`
+      followed by `l2update` messages. Each update tuple is
+      `[side, price, size]` where size of `0` removes the level.
+    servers: [exchange]
+    subscribe:
+      operationId: exchangeLevel2Subscribe
+      message:
+        oneOf:
+          - $ref: '#/components/messages/ExchangeLevel2Snapshot'
+          - $ref: '#/components/messages/ExchangeLevel2Update'
+    publish:
+      operationId: exchangeLevel2SubscribeRequest
+      message:
+        $ref: '#/components/messages/ExchangeSubscribe'
+
+  exchange/level2_batch:
+    description: |
+      Public, unauthenticated variant of level2 that batches updates
+      into 50ms windows.
+    servers: [exchange]
+    subscribe:
+      operationId: exchangeLevel2BatchSubscribe
+      message:
+        oneOf:
+          - $ref: '#/components/messages/ExchangeLevel2Snapshot'
+          - $ref: '#/components/messages/ExchangeLevel2Update'
+    publish:
+      operationId: exchangeLevel2BatchSubscribeRequest
+      message:
+        $ref: '#/components/messages/ExchangeSubscribe'
+
+  exchange/full:
+    description: |
+      Authenticated stream of every order lifecycle event required to
+      maintain a Level 3 order book: `received`, `open`, `done`,
+      `match`, `change`, `activate`.
+    servers: [exchange]
+    subscribe:
+      operationId: exchangeFullSubscribe
+      message:
+        oneOf:
+          - $ref: '#/components/messages/ExchangeFullReceived'
+          - $ref: '#/components/messages/ExchangeFullOpen'
+          - $ref: '#/components/messages/ExchangeFullDone'
+          - $ref: '#/components/messages/ExchangeFullMatch'
+          - $ref: '#/components/messages/ExchangeFullChange'
+          - $ref: '#/components/messages/ExchangeFullActivate'
+    publish:
+      operationId: exchangeFullSubscribeRequest
+      message:
+        $ref: '#/components/messages/ExchangeSubscribeAuthenticated'
+
+  exchange/matches:
+    description: |
+      Stream of individual trade executions. Note: messages may be
+      dropped; use `full` if you need guaranteed delivery.
+    servers: [exchange]
+    subscribe:
+      operationId: exchangeMatchesSubscribe
+      message:
+        $ref: '#/components/messages/ExchangeMatch'
+    publish:
+      operationId: exchangeMatchesSubscribeRequest
+      message:
+        $ref: '#/components/messages/ExchangeSubscribe'
+
+  exchange/auction:
+    description: |
+      Indicative auction state during auction mode: tentative match
+      price/size plus the best bid/ask.
+    servers: [exchange]
+    subscribe:
+      operationId: exchangeAuctionSubscribe
+      message:
+        $ref: '#/components/messages/ExchangeAuction'
+    publish:
+      operationId: exchangeAuctionSubscribeRequest
+      message:
+        $ref: '#/components/messages/ExchangeSubscribe'
+
+  exchange/user:
+    description: |
+      Authenticated, user-filtered variant of `full`. Only includes
+      messages relevant to the API key that signed the subscription.
+    servers: [exchange]
+    subscribe:
+      operationId: exchangeUserSubscribe
+      message:
+        oneOf:
+          - $ref: '#/components/messages/ExchangeFullReceived'
+          - $ref: '#/components/messages/ExchangeFullOpen'
+          - $ref: '#/components/messages/ExchangeFullDone'
+          - $ref: '#/components/messages/ExchangeFullMatch'
+          - $ref: '#/components/messages/ExchangeFullChange'
+          - $ref: '#/components/messages/ExchangeFullActivate'
+    publish:
+      operationId: exchangeUserSubscribeRequest
+      message:
+        $ref: '#/components/messages/ExchangeSubscribeAuthenticated'
+
+  exchange/rfq_matches:
+    description: |
+      Request For Quote executions across products.
+    servers: [exchange]
+    subscribe:
+      operationId: exchangeRfqMatchesSubscribe
+      message:
+        $ref: '#/components/messages/ExchangeRfqMatch'
+    publish:
+      operationId: exchangeRfqMatchesSubscribeRequest
+      message:
+        $ref: '#/components/messages/ExchangeSubscribe'
+
+  ##############################################################
+  # Coinbase Advanced Trade channels
+  ##############################################################
+
+  advancedTrade/heartbeats:
+    description: |
+      Server ping every second. Required on the User Order Data
+      endpoint and recommended on the public endpoint to prevent
+      idle disconnects.
+    servers: [advancedTradeUser]
+    subscribe:
+      operationId: advancedTradeHeartbeatsSubscribe
+      message:
+        $ref: '#/components/messages/AdvancedTradeHeartbeats'
+    publish:
+      operationId: advancedTradeHeartbeatsSubscribeRequest
+      message:
+        $ref: '#/components/messages/AdvancedTradeSubscribe'
+
+  advancedTrade/candles:
+    description: |
+      5-minute interval candlestick data per product.
+    servers: [advancedTrade]
+    subscribe:
+      operationId: advancedTradeCandlesSubscribe
+      message:
+        $ref: '#/components/messages/AdvancedTradeCandles'
+    publish:
+      operationId: advancedTradeCandlesSubscribeRequest
+      message:
+        $ref: '#/components/messages/AdvancedTradeSubscribe'
+
+  advancedTrade/market_trades:
+    description: |
+      Real-time public trades, batched every 250ms.
+    servers: [advancedTrade]
+    subscribe:
+      operationId: advancedTradeMarketTradesSubscribe
+      message:
+        $ref: '#/components/messages/AdvancedTradeMarketTrades'
+    publish:
+      operationId: advancedTradeMarketTradesSubscribeRequest
+      message:
+        $ref: '#/components/messages/AdvancedTradeSubscribe'
+
+  advancedTrade/status:
+    description: |
+      Product and currency reference data emitted on preset intervals.
+    servers: [advancedTrade]
+    subscribe:
+      operationId: advancedTradeStatusSubscribe
+      message:
+        $ref: '#/components/messages/AdvancedTradeStatus'
+    publish:
+      operationId: advancedTradeStatusSubscribeRequest
+      message:
+        $ref: '#/components/messages/AdvancedTradeSubscribe'
+
+  advancedTrade/ticker:
+    description: |
+      Per-match ticker updates with best bid/ask and 24h / 52w stats.
+    servers: [advancedTrade]
+    subscribe:
+      operationId: advancedTradeTickerSubscribe
+      message:
+        $ref: '#/components/messages/AdvancedTradeTicker'
+    publish:
+      operationId: advancedTradeTickerSubscribeRequest
+      message:
+        $ref: '#/components/messages/AdvancedTradeSubscribe'
+
+  advancedTrade/ticker_batch:
+    description: |
+      Same payload as `ticker`, emitted at most every 5 seconds per
+      product if the price has changed. Bid/ask fields are excluded.
+    servers: [advancedTrade]
+    subscribe:
+      operationId: advancedTradeTickerBatchSubscribe
+      message:
+        $ref: '#/components/messages/AdvancedTradeTickerBatch'
+    publish:
+      operationId: advancedTradeTickerBatchSubscribeRequest
+      message:
+        $ref: '#/components/messages/AdvancedTradeSubscribe'
+
+  advancedTrade/level2:
+    description: |
+      Order book snapshot and incremental updates. Updates carry
+      `[side, price_level, new_quantity, event_time]` tuples; a
+      `new_quantity` of `0` removes the level.
+    servers: [advancedTrade]
+    subscribe:
+      operationId: advancedTradeLevel2Subscribe
+      message:
+        $ref: '#/components/messages/AdvancedTradeLevel2'
+    publish:
+      operationId: advancedTradeLevel2SubscribeRequest
+      message:
+        $ref: '#/components/messages/AdvancedTradeSubscribe'
+
+  advancedTrade/user:
+    description: |
+      Authenticated stream of the user's orders and (for futures)
+      position events. Initial open orders are sent in batches of 50.
+    servers: [advancedTradeUser]
+    subscribe:
+      operationId: advancedTradeUserSubscribe
+      message:
+        $ref: '#/components/messages/AdvancedTradeUser'
+    publish:
+      operationId: advancedTradeUserSubscribeRequest
+      message:
+        $ref: '#/components/messages/AdvancedTradeSubscribe'
+
+  advancedTrade/futures_balance_summary:
+    description: |
+      Real-time futures account balance summary including buying
+      power, margin requirements, and liquidation thresholds.
+    servers: [advancedTradeUser]
+    subscribe:
+      operationId: advancedTradeFuturesBalanceSummarySubscribe
+      message:
+        $ref: '#/components/messages/AdvancedTradeFuturesBalanceSummary'
+    publish:
+      operationId: advancedTradeFuturesBalanceSummarySubscribeRequest
+      message:
+        $ref: '#/components/messages/AdvancedTradeSubscribe'
+
+components:
+  securitySchemes:
+    exchangeSignedAuth:
+      type: apiKey
+      in: user
+      description: |
+        Coinbase Exchange authenticated channels (`full`, `user`) require
+        the subscribe envelope to include:
+
+        - `signature` - base64(HMAC-SHA256(secret,
+          `timestamp + "GET" + "/users/self/verify"`))
+        - `key`       - API key id
+        - `passphrase` - API key passphrase
+        - `timestamp` - current Unix epoch seconds (must match signature)
+
+        See `ExchangeSubscribeAuthenticated` for the full envelope.
+    advancedTradeJwt:
+      type: httpApiKey
+      in: user
+      name: jwt
+      description: |
+        Coinbase Advanced Trade WebSocket uses a JWT included in the
+        `jwt` field of each subscribe message.
+
+        Header:
+          - `alg`: "ES256"
+          - `kid`: CDP API Key id
+          - `nonce`: random 16-byte hex string
+        Payload:
+          - `iss`: "cdp"
+          - `sub`: CDP API Key id
+          - `nbf`: now (epoch seconds)
+          - `exp`: now + 120 (epoch seconds)
+
+        A new JWT must be generated for every subscribe message because
+        tokens expire after 2 minutes.
+
+  messages:
+    ##########################################################
+    # Subscribe envelopes
+    ##########################################################
+    ExchangeSubscribe:
+      name: ExchangeSubscribe
+      title: Exchange subscribe / unsubscribe envelope
+      summary: |
+        Client subscribe / unsubscribe request for the Coinbase Exchange
+        WebSocket feed.
+      contentType: application/json
+      payload:
+        $ref: '#/components/schemas/ExchangeSubscribe'
+
+    ExchangeSubscribeAuthenticated:
+      name: ExchangeSubscribeAuthenticated
+      title: Exchange authenticated subscribe envelope
+      summary: |
+        Subscribe envelope required for the `full` and `user` channels.
+        Adds `signature`, `key`, `passphrase`, `timestamp`.
+      contentType: application/json
+      payload:
+        $ref: '#/components/schemas/ExchangeSubscribeAuthenticated'
+
+    AdvancedTradeSubscribe:
+      name: AdvancedTradeSubscribe
+      title: Advanced Trade subscribe envelope
+      summary: |
+        Client subscribe / unsubscribe request for the Advanced Trade
+        WebSocket. Authenticated channels include `jwt`.
+      contentType: application/json
+      payload:
+        $ref: '#/components/schemas/AdvancedTradeSubscribe'
+
+    ##########################################################
+    # Exchange messages
+    ##########################################################
+    ExchangeHeartbeat:
+      name: ExchangeHeartbeat
+      title: Exchange heartbeat
+      contentType: application/json
+      payload:
+        $ref: '#/components/schemas/ExchangeHeartbeat'
+
+    ExchangeStatus:
+      name: ExchangeStatus
+      title: Exchange status
+      contentType: application/json
+      payload:
+        $ref: '#/components/schemas/ExchangeStatus'
+
+    ExchangeTicker:
+      name: ExchangeTicker
+      title: Exchange ticker
+      contentType: application/json
+      payload:
+        $ref: '#/components/schemas/ExchangeTicker'
+
+    ExchangeLevel2Snapshot:
+      name: ExchangeLevel2Snapshot
+      title: Exchange level2 snapshot
+      contentType: application/json
+      payload:
+        $ref: '#/components/schemas/ExchangeLevel2Snapshot'
+
+    ExchangeLevel2Update:
+      name: ExchangeLevel2Update
+      title: Exchange l2update
+      contentType: application/json
+      payload:
+        $ref: '#/components/schemas/ExchangeLevel2Update'
+
+    ExchangeFullReceived:
+      name: ExchangeFullReceived
+      title: Exchange full - received
+      contentType: application/json
+      payload:
+        $ref: '#/components/schemas/ExchangeFullReceived'
+
+    ExchangeFullOpen:
+      name: ExchangeFullOpen
+      title: Exchange full - open
+      contentType: application/json
+      payload:
+        $ref: '#/components/schemas/ExchangeFullOpen'
+
+    ExchangeFullDone:
+      name: ExchangeFullDone
+      title: Exchange full - done
+      contentType: application/json
+      payload:
+        $ref: '#/components/schemas/ExchangeFullDone'
+
+    ExchangeFullMatch:
+      name: ExchangeFullMatch
+      title: Exchange full - match
+      contentType: application/json
+      payload:
+        $ref: '#/components/schemas/ExchangeFullMatch'
+
+    ExchangeFullChange:
+      name: ExchangeFullChange
+      title: Exchange full - change
+      contentType: application/json
+      payload:
+        $ref: '#/components/schemas/ExchangeFullChange'
+
+    ExchangeFullActivate:
+      name: ExchangeFullActivate
+      title: Exchange full - activate
+      contentType: application/json
+      payload:
+        $ref: '#/components/schemas/ExchangeFullActivate'
+
+    ExchangeMatch:
+      name: ExchangeMatch
+      title: Exchange matches
+      contentType: application/json
+      payload:
+        $ref: '#/components/schemas/ExchangeFullMatch'
+
+    ExchangeAuction:
+      name: ExchangeAuction
+      title: Exchange auction
+      contentType: application/json
+      payload:
+        $ref: '#/components/schemas/ExchangeAuction'
+
+    ExchangeRfqMatch:
+      name: ExchangeRfqMatch
+      title: Exchange RFQ match
+      contentType: application/json
+      payload:
+        $ref: '#/components/schemas/ExchangeRfqMatch'
+
+    ##########################################################
+    # Advanced Trade messages
+    ##########################################################
+    AdvancedTradeHeartbeats:
+      name: AdvancedTradeHeartbeats
+      title: Advanced Trade heartbeats
+      contentType: application/json
+      payload:
+        $ref: '#/components/schemas/AdvancedTradeHeartbeats'
+
+    AdvancedTradeCandles:
+      name: AdvancedTradeCandles
+      title: Advanced Trade candles
+      contentType: application/json
+      payload:
+        $ref: '#/components/schemas/AdvancedTradeCandles'
+
+    AdvancedTradeMarketTrades:
+      name: AdvancedTradeMarketTrades
+      title: Advanced Trade market_trades
+      contentType: application/json
+      payload:
+        $ref: '#/components/schemas/AdvancedTradeMarketTrades'
+
+    AdvancedTradeStatus:
+      name: AdvancedTradeStatus
+      title: Advanced Trade status
+      contentType: application/json
+      payload:
+        $ref: '#/components/schemas/AdvancedTradeStatus'
+
+    AdvancedTradeTicker:
+      name: AdvancedTradeTicker
+      title: Advanced Trade ticker
+      contentType: application/json
+      payload:
+        $ref: '#/components/schemas/AdvancedTradeTicker'
+
+    AdvancedTradeTickerBatch:
+      name: AdvancedTradeTickerBatch
+      title: Advanced Trade ticker_batch
+      contentType: application/json
+      payload:
+        $ref: '#/components/schemas/AdvancedTradeTickerBatch'
+
+    AdvancedTradeLevel2:
+      name: AdvancedTradeLevel2
+      title: Advanced Trade level2
+      contentType: application/json
+      payload:
+        $ref: '#/components/schemas/AdvancedTradeLevel2'
+
+    AdvancedTradeUser:
+      name: AdvancedTradeUser
+      title: Advanced Trade user
+      contentType: application/json
+      payload:
+        $ref: '#/components/schemas/AdvancedTradeUser'
+
+    AdvancedTradeFuturesBalanceSummary:
+      name: AdvancedTradeFuturesBalanceSummary
+      title: Advanced Trade futures_balance_summary
+      contentType: application/json
+      payload:
+        $ref: '#/components/schemas/AdvancedTradeFuturesBalanceSummary'
+
+  schemas:
+    ##########################################################
+    # Subscribe envelope schemas
+    ##########################################################
+    ExchangeSubscribe:
+      type: object
+      required: [type]
+      properties:
+        type:
+          type: string
+          enum: [subscribe, unsubscribe, subscriptions]
+        product_ids:
+          type: array
+          items: { type: string, example: ETH-USD }
+        channels:
+          type: array
+          items:
+            oneOf:
+              - type: string
+                enum:
+                  - heartbeat
+                  - status
+                  - ticker
+                  - ticker_batch
+                  - level2
+                  - level2_batch
+                  - full
+                  - matches
+                  - auction
+                  - user
+                  - rfq_matches
+              - type: object
+                required: [name]
+                properties:
+                  name:
+                    type: string
+                  product_ids:
+                    type: array
+                    items: { type: string }
+
+    ExchangeSubscribeAuthenticated:
+      allOf:
+        - $ref: '#/components/schemas/ExchangeSubscribe'
+        - type: object
+          required: [signature, key, passphrase, timestamp]
+          properties:
+            signature:
+              type: string
+              description: |
+                base64(HMAC-SHA256(api_secret,
+                timestamp + "GET" + "/users/self/verify"))
+            key:
+              type: string
+              description: API key id
+            passphrase:
+              type: string
+            timestamp:
+              type: string
+              description: Unix epoch seconds as a string; must match signature
+
+    AdvancedTradeSubscribe:
+      type: object
+      required: [type, channel]
+      properties:
+        type:
+          type: string
+          enum: [subscribe, unsubscribe]
+        channel:
+          type: string
+          enum:
+            - heartbeats
+            - candles
+            - market_trades
+            - status
+            - ticker
+            - ticker_batch
+            - level2
+            - user
+            - futures_balance_summary
+        product_ids:
+          type: array
+          items: { type: string, example: BTC-USD }
+        jwt:
+          type: string
+          description: |
+            CDP JWT (ES256). Required for authenticated channels and
+            recommended for all channels. Regenerate per message.
+
+    ##########################################################
+    # Exchange schemas
+    ##########################################################
+    ExchangeHeartbeat:
+      type: object
+      properties:
+        type: { type: string, enum: [heartbeat] }
+        sequence: { type: integer }
+        last_trade_id: { type: integer }
+        product_id: { type: string }
+        time: { type: string, format: date-time }
+
+    ExchangeStatus:
+      type: object
+      properties:
+        type: { type: string, enum: [status] }
+        products:
+          type: array
+          items:
+            type: object
+            properties:
+              id: { type: string }
+              base_currency: { type: string }
+              quote_currency: { type: string }
+              base_min_size: { type: string }
+              base_max_size: { type: string }
+              base_increment: { type: string }
+              quote_increment: { type: string }
+              display_name: { type: string }
+              status: { type: string }
+              status_message: { type: string, nullable: true }
+              min_market_funds: { type: string }
+              post_only: { type: boolean }
+              limit_only: { type: boolean }
+              cancel_only: { type: boolean }
+              fx_stablecoin: { type: boolean }
+        currencies:
+          type: array
+          items:
+            type: object
+            properties:
+              id: { type: string }
+              name: { type: string }
+              min_size: { type: string }
+              status: { type: string }
+              max_precision: { type: string }
+              convertible_to:
+                type: array
+                items: { type: string }
+              details: { type: object }
+
+    ExchangeTicker:
+      type: object
+      properties:
+        type: { type: string, enum: [ticker] }
+        sequence: { type: integer }
+        product_id: { type: string }
+        price: { type: string }
+        open_24h: { type: string }
+        volume_24h: { type: string }
+        low_24h: { type: string }
+        high_24h: { type: string }
+        volume_30d: { type: string }
+        best_bid: { type: string }
+        best_bid_size: { type: string }
+        best_ask: { type: string }
+        best_ask_size: { type: string }
+        side: { type: string, enum: [buy, sell] }
+        time: { type: string, format: date-time }
+        trade_id: { type: integer }
+        last_size: { type: string }
+
+    ExchangeLevel2Snapshot:
+      type: object
+      properties:
+        type: { type: string, enum: [snapshot] }
+        product_id: { type: string }
+        bids:
+          type: array
+          description: Array of [price, size] tuples
+          items:
+            type: array
+            items: { type: string }
+            minItems: 2
+            maxItems: 2
+        asks:
+          type: array
+          items:
+            type: array
+            items: { type: string }
+            minItems: 2
+            maxItems: 2
+
+    ExchangeLevel2Update:
+      type: object
+      properties:
+        type: { type: string, enum: [l2update] }
+        product_id: { type: string }
+        time: { type: string, format: date-time }
+        changes:
+          type: array
+          description: Array of [side, price, size] tuples; size 0 removes.
+          items:
+            type: array
+            items: { type: string }
+            minItems: 3
+            maxItems: 3
+
+    ExchangeFullReceived:
+      type: object
+      properties:
+        type: { type: string, enum: [received] }
+        time: { type: string, format: date-time }
+        product_id: { type: string }
+        sequence: { type: integer }
+        order_id: { type: string, format: uuid }
+        size: { type: string }
+        price: { type: string }
+        funds: { type: string }
+        side: { type: string, enum: [buy, sell] }
+        order_type: { type: string, enum: [limit, market] }
+        client_oid: { type: string }
+
+    ExchangeFullOpen:
+      type: object
+      properties:
+        type: { type: string, enum: [open] }
+        time: { type: string, format: date-time }
+        product_id: { type: string }
+        sequence: { type: integer }
+        order_id: { type: string, format: uuid }
+        price: { type: string }
+        remaining_size: { type: string }
+        side: { type: string, enum: [buy, sell] }
+
+    ExchangeFullDone:
+      type: object
+      properties:
+        type: { type: string, enum: [done] }
+        time: { type: string, format: date-time }
+        product_id: { type: string }
+        sequence: { type: integer }
+        price: { type: string }
+        order_id: { type: string, format: uuid }
+        reason: { type: string, enum: [filled, canceled] }
+        side: { type: string, enum: [buy, sell] }
+        remaining_size: { type: string }
+
+    ExchangeFullMatch:
+      type: object
+      properties:
+        type: { type: string, enum: [match, last_match] }
+        trade_id: { type: integer }
+        sequence: { type: integer }
+        maker_order_id: { type: string, format: uuid }
+        taker_order_id: { type: string, format: uuid }
+        time: { type: string, format: date-time }
+        product_id: { type: string }
+        size: { type: string }
+        price: { type: string }
+        side: { type: string, enum: [buy, sell] }
+        taker_user_id:
+          type: string
+          description: Present only on authenticated subscriptions
+        user_id:
+          type: string
+          description: Present only on authenticated subscriptions
+        taker_profile_id:
+          type: string
+        profile_id:
+          type: string
+        taker_fee_rate:
+          type: string
+
+    ExchangeFullChange:
+      type: object
+      properties:
+        type: { type: string, enum: [change] }
+        time: { type: string, format: date-time }
+        sequence: { type: integer }
+        order_id: { type: string, format: uuid }
+        product_id: { type: string }
+        new_size: { type: string }
+        old_size: { type: string }
+        new_funds: { type: string }
+        old_funds: { type: string }
+        price: { type: string }
+        side: { type: string, enum: [buy, sell] }
+
+    ExchangeFullActivate:
+      type: object
+      properties:
+        type: { type: string, enum: [activate] }
+        product_id: { type: string }
+        timestamp: { type: string }
+        user_id: { type: string }
+        profile_id: { type: string }
+        order_id: { type: string, format: uuid }
+        stop_type: { type: string, enum: [entry, exit] }
+        side: { type: string, enum: [buy, sell] }
+        stop_price: { type: string }
+        size: { type: string }
+        funds: { type: string }
+        private:
+          type: boolean
+          description: Always true on the user channel
+
+    ExchangeAuction:
+      type: object
+      properties:
+        type: { type: string, enum: [auction] }
+        product_id: { type: string }
+        sequence: { type: integer }
+        auction_state: { type: string, enum: [collection, calling, open] }
+        best_bid_price: { type: string }
+        best_bid_size: { type: string }
+        best_ask_price: { type: string }
+        best_ask_size: { type: string }
+        open_price: { type: string }
+        open_size: { type: string }
+        can_open: { type: string }
+        time: { type: string, format: date-time }
+
+    ExchangeRfqMatch:
+      type: object
+      properties:
+        type: { type: string, enum: [rfq_match] }
+        maker_order_id: { type: string, format: uuid }
+        taker_order_id: { type: string, format: uuid }
+        time: { type: string, format: date-time }
+        trade_id: { type: integer }
+        product_id: { type: string }
+        size: { type: string }
+        price: { type: string }
+        side: { type: string, enum: [buy, sell] }
+
+    ##########################################################
+    # Advanced Trade schemas
+    ##########################################################
+    AdvancedTradeEnvelope:
+      type: object
+      description: Common envelope wrapping all Advanced Trade messages.
+      properties:
+        channel: { type: string }
+        client_id: { type: string }
+        timestamp: { type: string, format: date-time }
+        sequence_num: { type: integer }
+        events:
+          type: array
+          items: { type: object }
+
+    AdvancedTradeHeartbeats:
+      type: object
+      properties:
+        channel: { type: string, enum: [heartbeats] }
+        client_id: { type: string }
+        timestamp: { type: string, format: date-time }
+        sequence_num: { type: integer }
+        events:
+          type: array
+          items:
+            type: object
+            properties:
+              current_time: { type: string }
+              heartbeat_counter: { type: integer }
+
+    AdvancedTradeCandles:
+      type: object
+      properties:
+        channel: { type: string, enum: [candles] }
+        client_id: { type: string }
+        timestamp: { type: string, format: date-time }
+        sequence_num: { type: integer }
+        events:
+          type: array
+          items:
+            type: object
+            properties:
+              type: { type: string, enum: [snapshot, update] }
+              candles:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    start: { type: string, description: UNIX timestamp }
+                    high: { type: string }
+                    low: { type: string }
+                    open: { type: string }
+                    close: { type: string }
+                    volume: { type: string }
+                    product_id: { type: string }
+
+    AdvancedTradeMarketTrades:
+      type: object
+      properties:
+        channel: { type: string, enum: [market_trades] }
+        client_id: { type: string }
+        timestamp: { type: string, format: date-time }
+        sequence_num: { type: integer }
+        events:
+          type: array
+          items:
+            type: object
+            properties:
+              type: { type: string, enum: [snapshot, update] }
+              trades:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    trade_id: { type: string }
+                    product_id: { type: string }
+                    price: { type: string }
+                    size: { type: string }
+                    side: { type: string, enum: [BUY, SELL] }
+                    time: { type: string, format: date-time }
+
+    AdvancedTradeStatus:
+      type: object
+      properties:
+        channel: { type: string, enum: [status] }
+        client_id: { type: string }
+        timestamp: { type: string, format: date-time }
+        sequence_num: { type: integer }
+        events:
+          type: array
+          items:
+            type: object
+            properties:
+              type: { type: string }
+              products:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    product_type: { type: string, enum: [SPOT, FUTURE] }
+                    id: { type: string }
+                    base_currency: { type: string }
+                    quote_currency: { type: string }
+                    base_increment: { type: string }
+                    quote_increment: { type: string }
+                    display_name: { type: string }
+                    status: { type: string }
+                    status_message: { type: string, nullable: true }
+                    min_market_funds: { type: string }
+
+    AdvancedTradeTicker:
+      type: object
+      properties:
+        channel: { type: string, enum: [ticker] }
+        client_id: { type: string }
+        timestamp: { type: string, format: date-time }
+        sequence_num: { type: integer }
+        events:
+          type: array
+          items:
+            type: object
+            properties:
+              type: { type: string, enum: [snapshot, update] }
+              tickers:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    type: { type: string }
+                    product_id: { type: string }
+                    price: { type: string }
+                    volume_24_h: { type: string }
+                    low_24_h: { type: string }
+                    high_24_h: { type: string }
+                    low_52_w: { type: string }
+                    high_52_w: { type: string }
+                    price_percent_chg_24_h: { type: string }
+                    best_bid: { type: string }
+                    best_ask: { type: string }
+                    best_bid_quantity: { type: string }
+                    best_ask_quantity: { type: string }
+
+    AdvancedTradeTickerBatch:
+      type: object
+      description: |
+        Same envelope as ticker; bid/ask fields are excluded from the
+        individual ticker entries.
+      properties:
+        channel: { type: string, enum: [ticker_batch] }
+        client_id: { type: string }
+        timestamp: { type: string, format: date-time }
+        sequence_num: { type: integer }
+        events:
+          type: array
+          items:
+            type: object
+            properties:
+              type: { type: string, enum: [snapshot, update] }
+              tickers:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    product_id: { type: string }
+                    price: { type: string }
+                    volume_24_h: { type: string }
+                    low_24_h: { type: string }
+                    high_24_h: { type: string }
+                    low_52_w: { type: string }
+                    high_52_w: { type: string }
+                    price_percent_chg_24_h: { type: string }
+
+    AdvancedTradeLevel2:
+      type: object
+      properties:
+        channel: { type: string, enum: [l2_data] }
+        client_id: { type: string }
+        timestamp: { type: string, format: date-time }
+        sequence_num: { type: integer }
+        events:
+          type: array
+          items:
+            type: object
+            properties:
+              type: { type: string, enum: [snapshot, update] }
+              product_id: { type: string }
+              updates:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    side: { type: string, enum: [bid, offer, ask] }
+                    event_time: { type: string, format: date-time }
+                    price_level: { type: string }
+                    new_quantity:
+                      type: string
+                      description: Aggregated size at price; 0 removes the level.
+
+    AdvancedTradeUser:
+      type: object
+      properties:
+        channel: { type: string, enum: [user] }
+        client_id: { type: string }
+        timestamp: { type: string, format: date-time }
+        sequence_num: { type: integer }
+        events:
+          type: array
+          items:
+            type: object
+            properties:
+              type: { type: string, enum: [snapshot, update] }
+              orders:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AdvancedTradeUserOrder'
+              positions:
+                type: object
+                properties:
+                  perpetual_futures_positions:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AdvancedTradePerpetualPosition'
+                  expiring_futures_positions:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AdvancedTradeExpiringPosition'
+
+    AdvancedTradeUserOrder:
+      type: object
+      properties:
+        order_id: { type: string }
+        client_order_id: { type: string }
+        cumulative_quantity: { type: string }
+        leaves_quantity: { type: string }
+        avg_price: { type: string }
+        total_fees: { type: string }
+        status:
+          type: string
+          enum: [PENDING, OPEN, FILLED, CANCELLED, EXPIRED, FAILED]
+        product_id: { type: string }
+        creation_time: { type: string, format: date-time }
+        order_side: { type: string, enum: [BUY, SELL] }
+        order_type:
+          type: string
+          enum: [LIMIT, MARKET, STOP_LIMIT]
+        cancel_reason: { type: string }
+        reject_reason: { type: string }
+        post_only: { type: boolean }
+        time_in_force:
+          type: string
+          enum: [GOOD_UNTIL_CANCELLED, GOOD_UNTIL_DATE_TIME,
+                 IMMEDIATE_OR_CANCEL, FILL_OR_KILL]
+        limit_price: { type: string }
+        stop_price: { type: string }
+        filled_value: { type: string }
+        start_time: { type: string, format: date-time }
+        end_time: { type: string, format: date-time }
+        outstanding_hold_amount: { type: string }
+        trigger_status: { type: string }
+        retail_portfolio_id: { type: string }
+
+    AdvancedTradePerpetualPosition:
+      type: object
+      properties:
+        product_id: { type: string }
+        portfolio_uuid: { type: string }
+        vwap: { type: string }
+        entry_vwap: { type: string }
+        position_side: { type: string, enum: [LONG, SHORT] }
+        margin_type: { type: string, enum: [CROSS, ISOLATED] }
+        net_size: { type: string }
+        buy_order_size: { type: string }
+        sell_order_size: { type: string }
+        leverage: { type: string }
+        mark_price: { type: string }
+        liquidation_price: { type: string }
+        im_notional: { type: string }
+        mm_notional: { type: string }
+        position_notional: { type: string }
+        unrealized_pnl: { type: string }
+        aggregated_pnl: { type: string }
+
+    AdvancedTradeExpiringPosition:
+      type: object
+      properties:
+        product_id: { type: string }
+        side: { type: string, enum: [LONG, SHORT] }
+        number_of_contracts: { type: string }
+        realized_pnl: { type: string }
+        unrealized_pnl: { type: string }
+        entry_price: { type: string }
+
+    AdvancedTradeFuturesBalanceSummary:
+      type: object
+      properties:
+        channel: { type: string, enum: [futures_balance_summary] }
+        client_id: { type: string }
+        timestamp: { type: string, format: date-time }
+        sequence_num: { type: integer }
+        events:
+          type: array
+          items:
+            type: object
+            properties:
+              type: { type: string, enum: [snapshot, update] }
+              fcm_balance_summary:
+                type: object
+                properties:
+                  futures_buying_power: { type: string }
+                  total_usd_balance: { type: string }
+                  cbi_usd_balance: { type: string }
+                  cfm_usd_balance: { type: string }
+                  total_open_orders_hold_amount: { type: string }
+                  unrealized_pnl: { type: string }
+                  daily_realized_pnl: { type: string }
+                  initial_margin: { type: string }
+                  available_margin: { type: string }
+                  liquidation_threshold: { type: string }
+                  liquidation_buffer_amount: { type: string }
+                  liquidation_buffer_percentage: { type: string }
+                  intraday_margin_window_measure:
+                    type: object
+                    description: Intraday margin window rules
+                  overnight_margin_window_measure:
+                    type: object
+                    description: Overnight margin window rules

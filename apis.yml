@@ -4,7 +4,7 @@ description: "Cryptocurrency Trading Platform"
 url: https://docs.pro.coinbase.com/#api
 specificationVersion: '0.20'
 created: '2026-05-28'
-modified: '2026-05-28'
+modified: '2026-05-29'
 x-source: public-apis/public-apis
 x-category: "Cryptocurrency"
 x-tier: 3
@@ -22,6 +22,8 @@ apis:
     properties:
       - type: Documentation
         url: https://docs.pro.coinbase.com/#api
+      - type: AsyncAPI
+        url: asyncapi/coinbase-pro-asyncapi.yml
 common:
   - type: Website
     url: https://docs.pro.coinbase.com/#api
