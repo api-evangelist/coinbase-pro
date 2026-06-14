@@ -1,0 +1,1221 @@
+"""
+Coinbase Advanced Trade - Conceptual GraphQL Schema
+Source: https://docs.cdp.coinbase.com/advanced-trade/docs/
+SDK:    https://github.com/coinbase/coinbase-advanced-py
+"""
+
+scalar Decimal
+scalar DateTime
+scalar JSON
+
+# ─── Enumerations ────────────────────────────────────────────────────────────
+
+enum OrderSide {
+  BUY
+  SELL
+}
+
+enum OrderType {
+  MARKET
+  LIMIT
+  STOP
+  STOP_LIMIT
+}
+
+enum OrderStatus {
+  PENDING
+  OPEN
+  FILLED
+  CANCELLED
+  EXPIRED
+  FAILED
+  UNKNOWN_ORDER_STATUS
+}
+
+enum TimeInForce {
+  GOOD_TILL_CANCELLED
+  GOOD_TILL_DATE_TIME
+  IMMEDIATE_OR_CANCEL
+  FILL_OR_KILL
+  UNKNOWN_TIME_IN_FORCE
+}
+
+enum CurrencyType {
+  CRYPTO
+  FIAT
+  UNKNOWN_CURRENCY_TYPE
+}
+
+enum OrderPlacementSource {
+  RETAIL_ADVANCED
+  RETAIL_SIMPLE
+  UNKNOWN_PLACEMENT_SOURCE
+}
+
+enum ContractExpiryType {
+  UNKNOWN_CONTRACT_EXPIRY_TYPE
+  EXPIRING
+  PERPETUAL
+}
+
+enum WebhookEventType {
+  ORDERS
+  MARKET_TRADES
+  LEVEL2
+  USER
+  HEARTBEATS
+  CANDLES
+  TICKER
+  TICKER_BATCH
+  STATUS
+}
+
+enum NotificationStatus {
+  UNREAD
+  READ
+}
+
+# ─── Scalars and utility types ────────────────────────────────────────────────
+
+type PageInfo {
+  hasNextPage: Boolean!
+  hasPreviousPage: Boolean!
+  startCursor: String
+  endCursor: String
+}
+
+# ─── Account Domain ───────────────────────────────────────────────────────────
+
+"""A user's trading account on Coinbase Advanced Trade."""
+type Account {
+  uuid: ID!
+  name: String!
+  currency: String!
+  availableBalance: AccountBalance!
+  default: Boolean!
+  active: Boolean!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+  deletedAt: DateTime
+  type: String
+  ready: Boolean!
+  hold: AccountBalance!
+}
+
+"""Balance value and currency denomination."""
+type AccountBalance {
+  value: Decimal!
+  currency: String!
+}
+
+"""Currency details attached to an account."""
+type AccountCurrency {
+  code: String!
+  name: String!
+  color: String
+  sortIndex: Int
+  exponent: Int!
+  type: CurrencyType!
+  addressRegex: String
+  assetUrl: String
+}
+
+type AccountConnection {
+  edges: [AccountEdge!]!
+  pageInfo: PageInfo!
+}
+
+type AccountEdge {
+  node: Account!
+  cursor: String!
+}
+
+# ─── Portfolio Domain ─────────────────────────────────────────────────────────
+
+"""A named portfolio grouping positions and balances."""
+type Portfolio {
+  uuid: ID!
+  name: String!
+  type: String!
+  deleted: Boolean!
+}
+
+"""Aggregate balance of a portfolio expressed in a target currency."""
+type PortfolioBalance {
+  totalBalance: Decimal!
+  totalBalanceFiat: Decimal!
+  totalUnrealizedPnl: Decimal!
+  totalUnrealizedPnlFiat: Decimal!
+  unrealizedPnlPercent: Decimal!
+  portfolioUuid: ID!
+}
+
+"""Collection of open positions within a portfolio."""
+type PortfolioPositions {
+  portfolioUuid: ID!
+  positions: [Position!]!
+  perpetualFuturesPositions: [Position!]!
+  expiringFuturesPositions: [Position!]!
+}
+
+"""A single open position in a product."""
+type Position {
+  productId: String!
+  productUuid: ID!
+  symbol: String!
+  avgEntryPrice: Decimal!
+  numberOfContracts: Decimal!
+  totalCost: Decimal!
+  totalValue: Decimal!
+  unrealizedPnl: Decimal!
+  unrealizedPnlPercent: Decimal!
+  dailyRealizedPnl: Decimal!
+  side: OrderSide!
+  leverage: Decimal
+  marginType: String
+}
+
+# ─── Order Domain ─────────────────────────────────────────────────────────────
+
+"""The core order object covering all order types."""
+type Order {
+  orderId: ID!
+  productId: String!
+  userId: String!
+  side: OrderSide!
+  clientOrderId: String
+  status: OrderStatus!
+  timeInForce: TimeInForce
+  createdTime: DateTime!
+  completionPercentage: Decimal!
+  filledSize: Decimal!
+  averageFilledPrice: Decimal!
+  fee: Decimal
+  numberOfFills: Int!
+  filledValue: Decimal!
+  pendingCancel: Boolean!
+  sizeInQuote: Boolean!
+  totalFees: Decimal!
+  sizeFiatValue: Decimal
+  outstandingHoldAmount: Decimal!
+  isLiquidation: Boolean!
+  lastFillTime: DateTime
+  editHistory: [OrderEditRecord!]
+  leverage: Decimal
+  marginType: String
+  retailPortfolioId: String
+  originatingOrderId: String
+  attachedOrderId: String
+  orderPlacementSource: OrderPlacementSource
+  contractExpiryType: ContractExpiryType
+  orderConfiguration: OrderConfiguration
+  triggerStatus: String
+  cancelMessage: String
+  rejectMessage: String
+  rejectReason: String
+  settledAt: DateTime
+  orderError: OrderError
+}
+
+"""Union-style wrapper for order configuration details."""
+type OrderConfiguration {
+  marketMarketIoc: MarketOrder
+  limitLimitGtc: LimitOrder
+  limitLimitGtd: LimitOrder
+  stopLimitStopLimitGtc: StopLimitOrder
+  stopLimitStopLimitGtd: StopLimitOrder
+  triggerBracketGtc: StopOrder
+  triggerBracketGtd: StopOrder
+}
+
+"""Market order configuration."""
+type MarketOrder {
+  quoteSize: Decimal
+  baseSize: Decimal
+}
+
+"""Limit order configuration."""
+type LimitOrder {
+  baseSize: Decimal!
+  limitPrice: Decimal!
+  endTime: DateTime
+  postOnly: Boolean!
+}
+
+"""Stop order configuration."""
+type StopOrder {
+  baseSize: Decimal!
+  limitPrice: Decimal!
+  stopTriggerPrice: Decimal!
+  endTime: DateTime
+}
+
+"""Stop-limit order configuration."""
+type StopLimitOrder {
+  baseSize: Decimal!
+  limitPrice: Decimal!
+  stopPrice: Decimal!
+  endTime: DateTime
+  stopDirection: String!
+}
+
+"""Record of an edit made to a placed order."""
+type OrderEditRecord {
+  price: Decimal!
+  size: Decimal!
+  replaceAcceptTimestamp: DateTime!
+}
+
+"""Error detail returned when an order fails."""
+type OrderError {
+  error: String!
+  message: String!
+  previewFailureReason: String
+  newOrderFailureReason: String
+}
+
+"""A single execution fill against an order."""
+type OrderFill {
+  entryId: String!
+  tradeId: String!
+  orderId: ID!
+  tradeTime: DateTime!
+  tradeType: String!
+  price: Decimal!
+  size: Decimal!
+  commission: Decimal!
+  productId: String!
+  sequenceTimestamp: DateTime!
+  liquidityIndicator: String
+  sizeInQuote: Boolean!
+  userId: String!
+  side: OrderSide!
+  retailPortfolioId: String
+}
+
+type OrderConnection {
+  edges: [OrderEdge!]!
+  pageInfo: PageInfo!
+  hasNext: Boolean!
+  cursor: String
+}
+
+type OrderEdge {
+  node: Order!
+  cursor: String!
+}
+
+# ─── Fill / Trade Domain ──────────────────────────────────────────────────────
+
+"""Detailed record of a trade fill including fee and liquidity."""
+type FillRecord {
+  entryId: String!
+  tradeId: String!
+  orderId: ID!
+  tradeTime: DateTime!
+  price: Decimal!
+  size: Decimal!
+  commission: Decimal!
+  productId: String!
+  sequenceTimestamp: DateTime!
+  liquidityIndicator: String
+  sizeInQuote: Boolean!
+  userId: String!
+  side: OrderSide!
+}
+
+"""A completed trade on the exchange."""
+type Trade {
+  tradeId: String!
+  productId: String!
+  price: Decimal!
+  size: Decimal!
+  time: DateTime!
+  side: OrderSide!
+  bid: Decimal
+  ask: Decimal
+}
+
+# ─── Market Data Domain ───────────────────────────────────────────────────────
+
+"""Metadata about a tradeable product."""
+type ProductData {
+  productId: ID!
+  price: Decimal!
+  pricePercentageChange24h: Decimal!
+  volume24h: Decimal!
+  volumePercentageChange24h: Decimal!
+  baseIncrement: Decimal!
+  quoteIncrement: Decimal!
+  quoteMinSize: Decimal!
+  quoteMaxSize: Decimal!
+  baseMinSize: Decimal!
+  baseMaxSize: Decimal!
+  baseName: String!
+  quoteName: String!
+  watched: Boolean!
+  isDisabled: Boolean!
+  new: Boolean!
+  status: String!
+  cancelOnly: Boolean!
+  limitOnly: Boolean!
+  postOnly: Boolean!
+  tradingDisabled: Boolean!
+  auctionMode: Boolean!
+  productType: String!
+  quoteCurrencyId: String!
+  baseCurrencyId: String!
+  midMarketPrice: Decimal
+  alias: String
+  aliasTo: [String!]
+  baseDisplaySymbol: String!
+  quoteDisplaySymbol: String!
+  viewOnly: Boolean!
+  priceIncrement: Decimal
+  displayName: String!
+  productVenue: String
+  approximateQuote24hVolume: Decimal
+  fcmTradingSessionDetails: JSON
+  midMarketPricePercentageChange24h: Decimal
+  priceBandingEnabled: Boolean
+  contractExpiryType: ContractExpiryType
+}
+
+"""Base and quote currency pairing details."""
+type TradingPair {
+  id: ID!
+  baseCurrency: String!
+  quoteCurrency: String!
+  quoteIncrement: Decimal!
+  baseIncrement: Decimal!
+  displayName: String!
+  minMarketFunds: Decimal!
+  marginEnabled: Boolean!
+  postOnly: Boolean!
+  limitOnly: Boolean!
+  cancelOnly: Boolean!
+  status: String!
+  statusMessage: String
+  auctionMode: Boolean!
+}
+
+"""Real-time snapshot of a product's market state."""
+type MarketData {
+  productId: String!
+  price: Decimal!
+  volume24h: Decimal!
+  low24h: Decimal!
+  high24h: Decimal!
+  low52w: Decimal
+  high52w: Decimal
+  pricePercentageChange24h: Decimal!
+  volume: Decimal!
+}
+
+"""A single price level in the order book."""
+type BookOrder {
+  price: Decimal!
+  size: Decimal!
+  numOrders: Int
+}
+
+"""Full or aggregated order book for a product."""
+type OrderBook {
+  productId: String!
+  bids: [BookOrder!]!
+  asks: [BookOrder!]!
+  time: DateTime!
+}
+
+"""Latest price, volume, and bid/ask for a product."""
+type Ticker {
+  tradeId: String!
+  price: Decimal!
+  size: Decimal!
+  time: DateTime!
+  bid: Decimal!
+  ask: Decimal!
+  volume: Decimal!
+}
+
+"""OHLCV candlestick data point."""
+type Candle {
+  start: DateTime!
+  low: Decimal!
+  high: Decimal!
+  open: Decimal!
+  close: Decimal!
+  volume: Decimal!
+}
+
+"""24-hour rolling statistics for a product."""
+type Stats24h {
+  open: Decimal!
+  high: Decimal!
+  low: Decimal!
+  last: Decimal!
+  volume: Decimal!
+  volume30Day: Decimal!
+}
+
+"""Open, high, low, volume, last for the current day."""
+type DailyStats {
+  open: Decimal!
+  high: Decimal!
+  low: Decimal!
+  last: Decimal!
+  volume: Decimal!
+  date: DateTime!
+}
+
+"""Volume metrics across a set of products."""
+type TradingVolume {
+  productId: String!
+  volume: Decimal!
+  currency: String!
+  time: DateTime!
+}
+
+"""Aggregated statistics for a product."""
+type ProductStats {
+  open: Decimal!
+  high: Decimal!
+  low: Decimal!
+  last: Decimal!
+  volume: Decimal!
+  rfqVolume: Decimal
+  indexPrice: Decimal
+}
+
+# ─── Currency and Rate Domain ─────────────────────────────────────────────────
+
+"""Details about a supported currency."""
+type CurrencyInfo {
+  id: ID!
+  name: String!
+  minSize: Decimal!
+  status: String!
+  message: String
+  maxPrecision: Decimal!
+  convertibleTo: [String!]
+  details: CurrencyDetails
+  defaultNetwork: String
+  supportedNetworks: [NetworkInfo!]
+}
+
+type CurrencyDetails {
+  type: CurrencyType!
+  symbol: String
+  networkConfirmations: Int
+  sortOrder: Int
+  cryptoAddressLink: String
+  cryptoTransactionLink: String
+  pushPaymentMethods: [String!]
+  groupTypes: [String!]
+}
+
+type NetworkInfo {
+  id: String!
+  name: String!
+  status: String!
+  contractAddress: String
+  cryptoAddressLink: String
+  cryptoTransactionLink: String
+  minWithdrawalAmount: Decimal
+  maxWithdrawalAmount: Decimal
+  networkConfirmations: Int
+  processingTimeSeconds: Int
+}
+
+"""List of supported fiat currencies."""
+type FiatCurrencies {
+  currencies: [CurrencyInfo!]!
+}
+
+"""Conversion rate between two currencies."""
+type ExchangeRate {
+  currency: String!
+  rates: JSON!
+  rate: Decimal
+  toCurrency: String
+}
+
+"""A quoted price for a fiat-to-fiat conversion."""
+type ConversionQuote {
+  id: ID!
+  fromAccount: String!
+  toAccount: String!
+  unitPrice: ConversionPrice!
+  totalFee: ConversionPrice!
+  feeMetadata: JSON
+  sourceAmount: ConversionPrice!
+  targetAmount: ConversionPrice!
+  expiresAt: DateTime!
+  cancelUrl: String
+  supportUrl: String
+}
+
+type ConversionPrice {
+  amount: Decimal!
+  currency: String!
+}
+
+"""A completed currency conversion record."""
+type Conversion {
+  id: ID!
+  amount: Decimal!
+  fromAccount: ID!
+  toAccount: ID!
+  conversionFee: Decimal!
+  spread: Decimal!
+  subtotalAmount: Decimal!
+  totalAmount: Decimal!
+  funds: Decimal!
+  payout: Decimal!
+  userId: ID!
+  status: String!
+}
+
+"""Request/response wrapper for conversion operations."""
+type Convert {
+  quote: ConversionQuote
+  conversion: Conversion
+}
+
+# ─── Transaction Domain ───────────────────────────────────────────────────────
+
+"""A general ledger entry (deposit, withdrawal, trade, fee, etc.)."""
+type Transaction {
+  id: ID!
+  type: String!
+  amount: AccountBalance!
+  nativeAmount: AccountBalance!
+  description: String
+  createdAt: DateTime!
+  updatedAt: DateTime!
+  resource: String!
+  status: String!
+  instant: Boolean!
+  details: TransactionDetails
+}
+
+type TransactionDetails {
+  title: String
+  subtitle: String
+  header: String
+  health: String
+}
+
+# ─── Payment and Banking Domain ───────────────────────────────────────────────
+
+"""A fiat payment transaction record."""
+type FiatPayment {
+  id: ID!
+  type: String!
+  amount: AccountBalance!
+  nativeAmount: AccountBalance!
+  description: String
+  createdAt: DateTime!
+  updatedAt: DateTime!
+  resource: String!
+  status: String!
+  paymentMethod: PaymentMethod
+  committed: Boolean!
+  fee: AccountBalance
+  transferId: String
+  payoutAt: DateTime
+  instant: Boolean!
+  subtotal: AccountBalance
+}
+
+"""A stored payment method (bank account, card, etc.)."""
+type PaymentMethod {
+  id: ID!
+  type: String!
+  name: String!
+  currency: String!
+  primaryBuy: Boolean!
+  primarySell: Boolean!
+  instantBuy: Boolean!
+  instantSell: Boolean!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+  resource: String!
+  verified: Boolean!
+  allowBuy: Boolean!
+  allowSell: Boolean!
+  allowDeposit: Boolean!
+  allowWithdraw: Boolean!
+  holdBusinessDays: Int
+  holdDays: Int
+  bankAccount: BankAccount
+  fiatAccount: FiatAccountRef
+  limits: JSON
+}
+
+"""Bank account linked for ACH or wire transfers."""
+type BankAccount {
+  id: ID!
+  accountNumber: String
+  routingNumber: String
+  bankName: String!
+  institutionCode: String
+  swift: String
+  iban: String
+  resourcePath: String
+  country: String
+  primaryBuy: Boolean
+  primarySell: Boolean
+  instantBuy: Boolean
+  instantSell: Boolean
+  createdAt: DateTime!
+  updatedAt: DateTime!
+  bankDetails: BankDetails
+}
+
+"""Routing and account number details for a bank."""
+type BankDetails {
+  routingNumber: String
+  accountNumber: String
+  bankName: String!
+  institutionCode: String
+  swift: String
+  iban: String
+  bankCountry: BankCountry
+}
+
+type BankCountry {
+  code: String!
+  name: String!
+}
+
+type FiatAccountRef {
+  id: ID!
+  resource: String!
+  resourcePath: String!
+}
+
+"""An outgoing or incoming wire transfer."""
+type WireTransfer {
+  id: ID!
+  amount: AccountBalance!
+  nativeAmount: AccountBalance!
+  subtotal: AccountBalance
+  createdAt: DateTime!
+  updatedAt: DateTime!
+  resource: String!
+  status: String!
+  fee: AccountBalance
+  paymentMethod: PaymentMethod
+  committed: Boolean!
+  instant: Boolean!
+  transferId: String
+  payoutAt: DateTime
+}
+
+"""An ACH bank transfer."""
+type ACHTransfer {
+  id: ID!
+  amount: AccountBalance!
+  nativeAmount: AccountBalance!
+  subtotal: AccountBalance
+  createdAt: DateTime!
+  updatedAt: DateTime!
+  resource: String!
+  status: String!
+  fee: AccountBalance
+  paymentMethod: PaymentMethod
+  committed: Boolean!
+  instant: Boolean!
+  transferId: String
+  payoutAt: DateTime
+}
+
+# ─── Crypto Address and Transfer Domain ──────────────────────────────────────
+
+"""A deposit address for a crypto currency."""
+type CryptoAddress {
+  id: ID!
+  address: String!
+  addressInfo: CryptoAddressInfo
+  name: String
+  createdAt: DateTime!
+  updatedAt: DateTime!
+  resource: String!
+  network: String!
+  uriScheme: String
+  title: String
+  displayAddress: String
+  legacyAddress: String
+  destinationTag: String
+  depositUri: String
+  warnings: [AddressWarning!]
+}
+
+"""Metadata and network info for a crypto address."""
+type CryptoAddressInfo {
+  address: String!
+  destinationTag: String
+  title: String
+  network: String!
+}
+
+type AddressWarning {
+  title: String!
+  details: String!
+  imageUrl: String
+}
+
+"""Details of a crypto or fiat deposit."""
+type DepositInfo {
+  id: ID!
+  status: String!
+  paymentMethod: PaymentMethod!
+  amount: AccountBalance!
+  subtotal: AccountBalance!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+  resource: String!
+  committed: Boolean!
+  fee: AccountBalance
+  payoutAt: DateTime
+  instant: Boolean!
+}
+
+"""Details of a crypto or fiat withdrawal."""
+type WithdrawalInfo {
+  id: ID!
+  status: String!
+  paymentMethod: PaymentMethod
+  amount: AccountBalance!
+  subtotal: AccountBalance
+  createdAt: DateTime!
+  updatedAt: DateTime!
+  resource: String!
+  committed: Boolean!
+  fee: AccountBalance
+  instant: Boolean!
+  transactionHash: String
+  destination: String
+}
+
+"""Estimated network fee for a withdrawal."""
+type FeeEstimate {
+  value: Decimal!
+  currency: String!
+  unitValue: Decimal
+  unitCurrency: String
+}
+
+# ─── API Credentials Domain ───────────────────────────────────────────────────
+
+"""An API key name and permission set."""
+type APIKey {
+  keyId: ID!
+  name: String!
+  scopes: [String!]!
+  createdAt: DateTime!
+  revokedAt: DateTime
+  principal: String
+  apiKeyInfo: JSON
+}
+
+"""Secret associated with an API key."""
+type APISecret {
+  keyId: ID!
+  secret: String!
+  createdAt: DateTime!
+}
+
+"""A short-lived authentication token."""
+type Token {
+  accessToken: String!
+  expiresAt: DateTime!
+  tokenType: String!
+}
+
+# ─── Webhook and Notification Domain ─────────────────────────────────────────
+
+"""A registered webhook endpoint."""
+type Webhook {
+  id: ID!
+  userId: String!
+  eventsCallbackUrl: String!
+  signatureHeader: String
+  webhookId: String!
+  eventTypes: [WebhookEventType!]!
+  productIds: [String!]
+  createdAt: DateTime!
+  updatedAt: DateTime!
+}
+
+"""An event type delivered to a webhook."""
+type WebhookEvent {
+  eventType: WebhookEventType!
+  productId: String
+  channelName: String
+  timestamp: DateTime!
+  sequenceNumber: Int
+  payload: JSON
+}
+
+"""A user notification triggered by account or market activity."""
+type Notification {
+  id: ID!
+  userId: String!
+  type: String!
+  title: String!
+  body: String!
+  status: NotificationStatus!
+  createdAt: DateTime!
+  readAt: DateTime
+  metadata: JSON
+}
+
+# ─── Input Types ──────────────────────────────────────────────────────────────
+
+input CreateOrderInput {
+  productId: String!
+  side: OrderSide!
+  clientOrderId: String
+  orderConfiguration: OrderConfigurationInput!
+  leverage: Decimal
+  marginType: String
+  retailPortfolioId: String
+}
+
+input OrderConfigurationInput {
+  marketMarketIoc: MarketOrderInput
+  limitLimitGtc: LimitOrderInput
+  limitLimitGtd: LimitOrderGtdInput
+  stopLimitStopLimitGtc: StopLimitOrderInput
+  stopLimitStopLimitGtd: StopLimitOrderGtdInput
+}
+
+input MarketOrderInput {
+  quoteSize: Decimal
+  baseSize: Decimal
+}
+
+input LimitOrderInput {
+  baseSize: Decimal!
+  limitPrice: Decimal!
+  postOnly: Boolean
+}
+
+input LimitOrderGtdInput {
+  baseSize: Decimal!
+  limitPrice: Decimal!
+  endTime: DateTime!
+  postOnly: Boolean
+}
+
+input StopLimitOrderInput {
+  baseSize: Decimal!
+  limitPrice: Decimal!
+  stopPrice: Decimal!
+  stopDirection: String!
+}
+
+input StopLimitOrderGtdInput {
+  baseSize: Decimal!
+  limitPrice: Decimal!
+  stopPrice: Decimal!
+  endTime: DateTime!
+  stopDirection: String!
+}
+
+input EditOrderInput {
+  orderId: ID!
+  price: Decimal
+  size: Decimal
+}
+
+input CreateConversionQuoteInput {
+  fromAccount: String!
+  toAccount: String!
+  amount: Decimal!
+  tradeIncentiveMetadata: JSON
+}
+
+input CommitConversionInput {
+  fromAccount: String!
+  toAccount: String!
+  quoteId: String!
+}
+
+input CreateWebhookInput {
+  notificationUri: String!
+  eventTypes: [WebhookEventType!]!
+  productIds: [String!]
+}
+
+input UpdateWebhookInput {
+  id: ID!
+  notificationUri: String
+  eventTypes: [WebhookEventType!]
+  productIds: [String!]
+}
+
+input ListOrdersInput {
+  productId: String
+  orderStatus: [OrderStatus!]
+  limit: Int
+  startDate: DateTime
+  endDate: DateTime
+  orderType: OrderType
+  orderSide: OrderSide
+  cursor: String
+  productType: String
+  orderPlacementSource: OrderPlacementSource
+  contractExpiryType: ContractExpiryType
+  retailPortfolioId: String
+}
+
+input ListFillsInput {
+  orderId: String
+  productId: String
+  startSequenceTimestamp: DateTime
+  endSequenceTimestamp: DateTime
+  limit: Int
+  cursor: String
+}
+
+input GetCandlesInput {
+  productId: String!
+  start: DateTime!
+  end: DateTime!
+  granularity: String!
+  limit: Int
+}
+
+input CreatePortfolioInput {
+  name: String!
+}
+
+input MovePortfolioFundsInput {
+  funds: Decimal!
+  currency: String!
+  fromPortfolioUuid: ID!
+  toPortfolioUuid: ID!
+}
+
+input CreateAddressInput {
+  accountId: ID!
+  name: String
+}
+
+input WithdrawCryptoInput {
+  amount: Decimal!
+  currency: String!
+  cryptoAddress: String!
+  destinationTag: String
+  noDestinationTag: Boolean
+  idem: String
+  toFinancialInstitution: Boolean
+  financialInstitutionWebsite: String
+  networkArn: String
+}
+
+input WithdrawFiatInput {
+  amount: Decimal!
+  currency: String!
+  paymentMethodId: ID!
+}
+
+input DepositFiatInput {
+  amount: Decimal!
+  currency: String!
+  paymentMethodId: ID!
+  commit: Boolean
+}
+
+# ─── Root Types ───────────────────────────────────────────────────────────────
+
+type Query {
+  """Fetch a specific account by UUID."""
+  account(uuid: ID!): Account
+
+  """List all accounts for the authenticated user."""
+  accounts(limit: Int, cursor: String): AccountConnection!
+
+  """Get a specific order by order ID."""
+  order(orderId: ID!): Order
+
+  """List orders with optional filters."""
+  orders(input: ListOrdersInput): OrderConnection!
+
+  """List fills (trade executions) for orders."""
+  fills(input: ListFillsInput): [FillRecord!]!
+
+  """Get a specific product by product ID."""
+  product(productId: ID!): ProductData
+
+  """List all products, optionally filtered."""
+  products(
+    limit: Int
+    offset: Int
+    productType: String
+    productIds: [String!]
+    contractExpiryType: ContractExpiryType
+    expiringContractStatus: String
+    getAllProducts: Boolean
+  ): [ProductData!]!
+
+  """Get order book for a product."""
+  productBook(productId: ID!, limit: Int, aggregationPriceIncrement: Decimal): OrderBook!
+
+  """Get candlestick data for a product."""
+  candles(input: GetCandlesInput!): [Candle!]!
+
+  """Get the latest trades for a product."""
+  marketTrades(productId: ID!, limit: Int, start: DateTime, end: DateTime): [Trade!]!
+
+  """Get best bid/ask for a product."""
+  bestBidAsk(productIds: [String!]!): [MarketData!]!
+
+  """Get a specific portfolio by UUID."""
+  portfolio(portfolioUuid: ID!): Portfolio
+
+  """List all portfolios."""
+  portfolios(portfolioType: String): [Portfolio!]!
+
+  """Get portfolio breakdown (balances and positions)."""
+  portfolioBreakdown(portfolioUuid: ID!, currency: String): PortfolioPositions!
+
+  """Get a payment method by ID."""
+  paymentMethod(paymentMethodId: ID!): PaymentMethod
+
+  """List payment methods for the authenticated user."""
+  paymentMethods: [PaymentMethod!]!
+
+  """Get a specific transaction."""
+  transaction(accountId: ID!, transactionId: ID!): Transaction
+
+  """List transactions for an account."""
+  transactions(accountId: ID!, limit: Int, offset: Int): [Transaction!]!
+
+  """Get a crypto deposit address for an account."""
+  cryptoAddress(accountId: ID!, addressId: ID!): CryptoAddress
+
+  """List crypto deposit addresses for an account."""
+  cryptoAddresses(accountId: ID!): [CryptoAddress!]!
+
+  """Get exchange rates for a base currency."""
+  exchangeRates(currency: String!): ExchangeRate!
+
+  """Get all supported currencies."""
+  currencies: [CurrencyInfo!]!
+
+  """Get a specific currency."""
+  currency(currencyId: ID!): CurrencyInfo
+
+  """Get fiat currencies only."""
+  fiatCurrencies: FiatCurrencies!
+
+  """Estimate network fee for a crypto withdrawal."""
+  cryptoWithdrawalFeeEstimate(currency: String!, cryptoAddress: String!, networkArn: String): FeeEstimate!
+
+  """Get conversion quote."""
+  conversionQuote(input: CreateConversionQuoteInput!): ConversionQuote!
+
+  """Get a conversion by ID."""
+  conversion(userNativeCurrency: String!, conversionId: ID!): Convert!
+
+  """List registered webhooks."""
+  webhooks: [Webhook!]!
+
+  """Get a specific webhook."""
+  webhook(webhookId: ID!): Webhook
+
+  """Get API key details (non-secret)."""
+  apiKey: APIKey
+
+  """List notifications."""
+  notifications(limit: Int, cursor: String): [Notification!]!
+
+  """Get 24h stats for a product."""
+  productStats(productId: ID!): ProductStats!
+
+  """Get ticker for a product."""
+  ticker(productId: ID!): Ticker!
+}
+
+type Mutation {
+  """Place a new order."""
+  createOrder(input: CreateOrderInput!): Order!
+
+  """Cancel a specific order."""
+  cancelOrder(orderId: ID!): Boolean!
+
+  """Cancel multiple orders at once."""
+  cancelOrders(orderIds: [ID!]!): [String!]!
+
+  """Edit an existing open order."""
+  editOrder(input: EditOrderInput!): Order!
+
+  """Preview an order edit without committing."""
+  editOrderPreview(input: EditOrderInput!): Order!
+
+  """Create a new portfolio."""
+  createPortfolio(input: CreatePortfolioInput!): Portfolio!
+
+  """Delete a portfolio."""
+  deletePortfolio(portfolioUuid: ID!): Boolean!
+
+  """Edit a portfolio name."""
+  editPortfolio(portfolioUuid: ID!, name: String!): Portfolio!
+
+  """Move funds between portfolios."""
+  movePortfolioFunds(input: MovePortfolioFundsInput!): PortfolioBalance!
+
+  """Create a new deposit address for an account."""
+  createCryptoAddress(input: CreateAddressInput!): CryptoAddress!
+
+  """Withdraw crypto from an account."""
+  withdrawCrypto(accountId: ID!, input: WithdrawCryptoInput!): WithdrawalInfo!
+
+  """Withdraw fiat from an account."""
+  withdrawFiat(accountId: ID!, input: WithdrawFiatInput!): FiatPayment!
+
+  """Deposit fiat into an account."""
+  depositFiat(accountId: ID!, input: DepositFiatInput!): FiatPayment!
+
+  """Commit a conversion after receiving a quote."""
+  commitConversion(input: CommitConversionInput!): Conversion!
+
+  """Create a webhook."""
+  createWebhook(input: CreateWebhookInput!): Webhook!
+
+  """Update a webhook."""
+  updateWebhook(input: UpdateWebhookInput!): Webhook!
+
+  """Delete a webhook."""
+  deleteWebhook(webhookId: ID!): Boolean!
+}
+
+type Subscription {
+  """Real-time ticker updates for a product."""
+  ticker(productIds: [String!]!): Ticker!
+
+  """Batch ticker updates."""
+  tickerBatch(productIds: [String!]!): [Ticker!]!
+
+  """Level 2 order book updates."""
+  level2(productIds: [String!]!): OrderBook!
+
+  """Real-time market trades."""
+  marketTrades(productIds: [String!]!): Trade!
+
+  """User order and fill updates."""
+  user: Order!
+
+  """Candlestick updates."""
+  candles(productIds: [String!]!, granularity: String!): Candle!
+
+  """Heartbeat to keep connection alive."""
+  heartbeats: DateTime!
+
+  """Status updates for products."""
+  status(productIds: [String!]!): ProductData!
+}

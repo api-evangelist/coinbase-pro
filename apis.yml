@@ -1,34 +1,36 @@
 aid: coinbase-pro
 name: Coinbase Pro
-description: "Cryptocurrency Trading Platform"
+description: Cryptocurrency Trading Platform
 url: https://docs.pro.coinbase.com/#api
 specificationVersion: '0.20'
 created: '2026-05-28'
 modified: '2026-05-29'
 x-source: public-apis/public-apis
-x-category: "Cryptocurrency"
+x-category: Cryptocurrency
 x-tier: 3
 x-tier-reason: bulk-registered-from-public-apis
 tags:
-  - Cryptocurrency
-  - Public APIs
+- Cryptocurrency
+- Public APIs
 apis:
-  - name: Coinbase Pro
-    description: "Cryptocurrency Trading Platform"
-    humanURL: https://docs.pro.coinbase.com/#api
-    baseURL: https://docs.pro.coinbase.com/#api
-    tags:
-      - Cryptocurrency
-    properties:
-      - type: Documentation
-        url: https://docs.pro.coinbase.com/#api
-      - type: AsyncAPI
-        url: asyncapi/coinbase-pro-asyncapi.yml
-common:
-  - type: Website
+- name: Coinbase Pro
+  description: Cryptocurrency Trading Platform
+  humanURL: https://docs.pro.coinbase.com/#api
+  baseURL: https://docs.pro.coinbase.com/#api
+  tags:
+  - Cryptocurrency
+  properties:
+  - type: Documentation
     url: https://docs.pro.coinbase.com/#api
-  - type: PublicAPIsListing
-    url: https://github.com/public-apis/public-apis
+  - type: AsyncAPI
+    url: asyncapi/coinbase-pro-asyncapi.yml
+  - url: graphql/coinbase-pro-graphql.md
+    type: GraphQL
+common:
+- type: Website
+  url: https://docs.pro.coinbase.com/#api
+- type: PublicAPIsListing
+  url: https://github.com/public-apis/public-apis
 maintainers:
-  - FN: Kin Lane
-    email: kin@apievangelist.com
+- FN: Kin Lane
+  email: kin@apievangelist.com
