@@ -27,6 +27,10 @@ apis:
   - url: graphql/coinbase-pro-graphql.md
     type: GraphQL
 common:
+- type: VulnerabilityDisclosure
+  url: security/coinbase-pro-vulnerability-disclosure.yml
+- type: DomainSecurity
+  url: security/coinbase-pro-domain-security.yml
 - type: Website
   url: https://docs.pro.coinbase.com/#api
 - type: PublicAPIsListing
