@@ -35,6 +35,7 @@ x-tier-reason: bulk-registered-from-public-apis
 tags:
 - Cryptocurrency
 - Public APIs
+- Real-Time
 apis:
 - name: Coinbase Pro
   description: Cryptocurrency Trading Platform
@@ -47,8 +48,6 @@ apis:
     url: https://docs.pro.coinbase.com/#api
   - type: AsyncAPI
     url: asyncapi/coinbase-pro-asyncapi.yml
-  - url: graphql/coinbase-pro-graphql.md
-    type: GraphQL
 common:
 - type: VulnerabilityDisclosure
   url: security/coinbase-pro-vulnerability-disclosure.yml
