@@ -40,7 +40,6 @@ apis:
 - name: Coinbase Pro
   description: Cryptocurrency Trading Platform
   humanURL: https://docs.pro.coinbase.com/#api
-  baseURL: https://docs.pro.coinbase.com/#api
   tags:
   - Cryptocurrency
   properties:
