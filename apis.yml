@@ -1,63 +1,29 @@
 aid: coinbase-pro
-deliveryModel:
-  model: unknown
-  open_source: false
-  commercial: false
-  callable_host: false
-  label: Delivery model not determined — needs a product licence on record
-  confidence: low
-  source:
-  - none
-  generated: '2026-08-28'
-  method: derived
-accessModel:
-  pricing: unknown
-  onboarding: unknown
-  trial: false
-  try_now: false
-  public: false
-  label: Unknown
-  confidence: low
-  source: []
-  generated: '2026-07-22'
-  method: derived
-image: https://kinlane-images.s3.amazonaws.com/shared/apis-json/icons/coinbase-pro.png
 name: Coinbase Pro
-description: Cryptocurrency Trading Platform
-url: https://docs.pro.coinbase.com/#api
-specificationVersion: '0.23'
-created: '2026-05-28'
-modified: '2026-05-29'
-x-source: public-apis/public-apis
-x-category: Cryptocurrency
-x-tier: 3
-x-tier-reason: bulk-registered-from-public-apis
+description: Coinbase Pro was Coinbase's professional trading platform and API (docs.pro.coinbase.com). It
+  was retired in 2022-2023 in favor of Coinbase Advanced Trade, with the institutional Pro API continuing as
+  the Coinbase Exchange API. Coinbase's current APIs are profiled in the coinbase repository, which is canonical.
+  Consolidated 2026-10-13, approved by Kin Lane.
+type: Index
+image: https://kinlane-images.s3.amazonaws.com/shared/apis-json/icons/coinbase-pro.png
 tags:
 - Cryptocurrency
 - Public APIs
 - Real-Time
-apis:
-- name: Coinbase Pro
-  description: Cryptocurrency Trading Platform
-  humanURL: https://docs.pro.coinbase.com/#api
-  tags:
-  - Cryptocurrency
-  properties:
-  - type: Documentation
-    url: https://docs.pro.coinbase.com/#api
-  - type: AsyncAPI
-    url: asyncapi/coinbase-pro-asyncapi.yml
-common:
-- type: VulnerabilityDisclosure
-  url: security/coinbase-pro-vulnerability-disclosure.yml
-- type: DomainSecurity
-  url: security/coinbase-pro-domain-security.yml
-- type: Website
-  url: https://docs.pro.coinbase.com/#api
-- type: PublicAPIsListing
-  url: https://github.com/public-apis/public-apis
+url: https://raw.githubusercontent.com/api-evangelist/coinbase-pro/refs/heads/main/apis.yml
+created: '2026-05-28'
+modified: '2026-10-13'
+specificationVersion: '0.23'
 maintainers:
 - FN: Kin Lane
   email: kin@apievangelist.com
+common:
+- type: ParentCompany
+  url: https://www.coinbase.com/
+  name: Coinbase (coinbase)
+- type: Documentation
+  url: https://docs.cdp.coinbase.com/exchange/docs/welcome
+apis: []
 x-parent: coinbase
-x-relationship: product
+x-relationship: retired-product
+x-consolidated-into: coinbase
