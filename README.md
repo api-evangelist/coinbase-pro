@@ -64,6 +64,24 @@
 > Full detail: **[Where this data comes from](https://apievangelist.com/about/where-our-data-comes-from)**
 <!-- API-EVANGELIST-PROVENANCE:END -->
 
-This profile has been **merged into [coinbase](https://apis.io/providers/coinbase/)** — the two records described the same company, and that one is canonical.
+> **Retired — merged into [Coinbase](https://apis.io/providers/coinbase/).** The two records described the same company, and that one is canonical. Nothing in this repository is maintained any more.
 
-Nothing here is maintained any more. The company's current profile, rating and artifacts are at [apis.io/providers/coinbase/](https://apis.io/providers/coinbase/).
+**Why:** Coinbase Pro is a retired Coinbase product (succeeded by Advanced Trade, with the Pro API continuing as the Coinbase Exchange API); coinbase is canonical and already profiles the Exchange and Advanced Trade REST APIs and WebSocket feeds. The Coinbase Pro API page points at the Coinbase Exchange API, its AsyncAPI at the coinbase Exchange AsyncAPI, the rest at the provider page. coinbase-pro stays live as a retired-product pointer with no APIs. Approved by Kin Lane 2026-10-13.
+
+**Retired:** 2026-10-13
+
+## Where to go now
+
+The current profile, APIs, artifacts and rating for Coinbase are on APIs.io at **[apis.io/providers/coinbase/](https://apis.io/providers/coinbase/)**.
+
+Pages that used to belong to this profile now live at:
+
+- [Coinbase Exchange API](https://apis.io/apis/coinbase/coinbase-exchange-api/)
+- [Coinbase Exchange AsyncAPI](https://apis.io/asyncapis/coinbase/coinbase-exchange-asyncapi/)
+- [Coinbase AsyncAPI Spectral Rules](https://apis.io/rules/coinbase/coinbase-asyncapi-spectral-rules/)
+- [Coinbase Domain Security](https://apis.io/security/coinbase/coinbase-domain-security/)
+- [Coinbase Vulnerability Disclosure](https://apis.io/security/coinbase/coinbase-vulnerability-disclosure/)
+
+## Open an issue
+
+Issues about Coinbase belong on the canonical profile: [open one on api-evangelist/coinbase](https://github.com/api-evangelist/coinbase/issues/new). If you think this merge was a mistake — these were really two companies — say so there or email [info@apievangelist.com](mailto:info@apievangelist.com).
